@@ -4,12 +4,12 @@ A real-time UK railway departure board console application powered by the Nation
 
 ## Features
 
-- 🔍 **Interactive Station Search**: Search for stations by name or 3-letter CRS code
-- 🚉 **Live Departure Information**: Real-time departure boards with up-to-date information
-- 🎯 **Destination Filtering**: Optionally filter departures by destination station
-- ⏰ **Comprehensive Details**: View scheduled time, expected time, platform, and service status
-- 🚨 **Status Indicators**: Color-coded display for on-time, delayed, and cancelled services
-- 📊 **Delay/Cancellation Reasons**: See explanations when services are disrupted
+- **Interactive Station Search**: Search for stations by name or 3-letter CRS code
+- **Live Departure Information**: Real-time departure boards with up-to-date information
+- **Destination Filtering**: Optionally filter departures by destination station
+- **Comprehensive Details**: View scheduled time, expected time, platform, and service status
+- **Status Indicators**: Color-coded display for on-time, delayed, and cancelled services
+- **Delay/Cancellation Reasons**: See explanations when services are disrupted
 
 ## Quick Start
 
@@ -162,4 +162,4 @@ This project is for personal use with the National Rail Darwin API.
 
 ---
 
-**Made with ❤️ for UK rail passengers**
+**Made with ❤️ for UK railway passengers**
