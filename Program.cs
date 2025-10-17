@@ -70,7 +70,12 @@ class Program
         // Configure console window (works better in Windows, but we can try for macOS)
         Console.Title = "UK Train Dashboard";
         Console.Clear();
-        DisplayHeader();
+    DisplayHeader();
+    // Darwin API timeOffset/timeWindow limits warning
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("NOTE: National Rail Darwin API can only fetch trains from 2 hours in the past to 2 hours in the future.");
+    Console.WriteLine("If you request a time outside this range, only the closest available trains will be shown.\n");
+    Console.ResetColor();
         
         var trainService = new TrainService(apiToken);
         
@@ -83,7 +88,7 @@ class Program
         if (aiService.IsEnabled)
         {
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("AI Natural Language Query Mode: ENABLED");
+            Console.WriteLine("\nAI Natural Language Query Mode: ENABLED");
             Console.ResetColor();
         }
         
@@ -220,7 +225,7 @@ class Program
         
         // Fetch and display
         Console.WriteLine("\nFetching live departure information...\n");
-        await DisplayDepartureBoardAsync(trainService, departureCode, destinationCode);
+        await DisplayDepartureBoardAsync(trainService, departureCode, destinationCode, parsedQuery.PreferredDepartureTime);
     }
     
     static async Task<string?> ResolveStationAsync(string stationInput, string stationType)
@@ -527,9 +532,61 @@ class Program
         return null;
     }
     
-    static async Task DisplayDepartureBoardAsync(TrainService trainService, string departureCode, string? destinationCode)
+    static async Task DisplayDepartureBoardAsync(TrainService trainService, string departureCode, string? destinationCode, TimeSpan? preferredTime = null)
     {
-        var board = await trainService.GetDepartureBoardAsync(departureCode, destinationCode, 15);
+        int timeOffset = 0;
+        int timeWindow = 120; // Default 2 hours
+        
+        // Calculate time offset and window if user specified a preferred time
+        if (preferredTime.HasValue)
+        {
+            var now = DateTime.Now.TimeOfDay;
+            var targetTime = preferredTime.Value;
+            
+            // Calculate minutes until target time
+            var minutesUntilTarget = (int)(targetTime - now).TotalMinutes;
+            
+            // Darwin API allows timeOffset from -120 to +120 minutes only
+            if (minutesUntilTarget > 120)
+            {
+                // Target is too far in the future (more than 2 hours)
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                var hour = targetTime.Hours;
+                var minute = targetTime.Minutes;
+                var ampm = hour >= 12 ? "PM" : "AM";
+                var displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                Console.WriteLine($"\nNote: {displayHour}:{minute:D2} {ampm} is more than 2 hours away.");
+                Console.WriteLine("Darwin API can only show trains up to 2 hours in the future.");
+                Console.WriteLine("Showing trains from 2 hours ahead instead:\n");
+                Console.ResetColor();
+                timeOffset = 120; // Max allowed
+                timeWindow = 120;
+            }
+            else if (minutesUntilTarget > 0)
+            {
+                // Target time is within the next 2 hours - show from now to past target
+                timeOffset = 0;
+                timeWindow = Math.Min(120, minutesUntilTarget + 60); // Go 1 hour past target or max 120
+            }
+            else if (minutesUntilTarget > -120)
+            {
+                // Target time was in the past but within lookback window
+                timeOffset = Math.Max(-120, minutesUntilTarget - 30);
+                timeWindow = 120;
+            }
+            else
+            {
+                // Target time is too far in the past
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("\nNote: Requested time has passed.");
+                Console.WriteLine("Showing current departures instead:\n");
+                Console.ResetColor();
+                timeOffset = 0;
+                timeWindow = 120;
+            }
+        }
+        
+        var board = await trainService.GetDepartureBoardAsync(departureCode, destinationCode, 20, timeOffset, timeWindow);
         
         if (board == null)
         {
@@ -545,7 +602,22 @@ class Program
             Console.WriteLine($"Calling at: {board.filterLocationName}");
         }
         Console.WriteLine($"Generated at: {board.generatedAt:HH:mm:ss}");
-        Console.ResetColor();
+        
+        // Show time filter if specified
+        if (preferredTime.HasValue)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            var hour = preferredTime.Value.Hours;
+            var minute = preferredTime.Value.Minutes;
+            var ampm = hour >= 12 ? "PM" : "AM";
+            var displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+            Console.WriteLine($"Showing trains around: {displayHour}:{minute:D2} {ampm}");
+            Console.ResetColor();
+        }
+        else
+        {
+            Console.ResetColor();
+        }
         
         if (board.trainServices == null || board.trainServices.Length == 0)
         {
@@ -558,6 +630,39 @@ class Program
             return;
         }
         
+        // Filter trains by preferred time if specified (client-side filtering for precision)
+        var filteredServices = board.trainServices;
+        if (preferredTime.HasValue)
+        {
+            var targetTime = preferredTime.Value;
+            var filterWindow = TimeSpan.FromHours(1); // Show trains within ±1 hour for precision
+            
+            filteredServices = board.trainServices.Where(service =>
+            {
+                if (string.IsNullOrEmpty(service.std)) return false;
+                
+                if (TimeSpan.TryParse(service.std, out var scheduledTime))
+                {
+                    var timeDiff = (scheduledTime - targetTime).Duration();
+                    return timeDiff <= filterWindow;
+                }
+                return false;
+            }).ToArray();
+            
+            if (filteredServices.Length == 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                var hour = targetTime.Hours;
+                var minute = targetTime.Minutes;
+                var ampm = hour >= 12 ? "PM" : "AM";
+                var displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                Console.WriteLine($"\nNo trains found around {displayHour}:{minute:D2} {ampm}.");
+                Console.WriteLine("Showing all available trains instead:");
+                Console.ResetColor();
+                filteredServices = board.trainServices;
+            }
+        }
+        
         // Store service IDs for selection
         var serviceIds = new Dictionary<int, string>();
         int index = 1;
@@ -566,7 +671,7 @@ class Program
         Console.WriteLine($"{"#",-3} {"Destination",-25} {"Sch",-6} {"Exp",-6} {"Plat",-5} {"Status",-12} {"Operator",-15}");
         Console.WriteLine(new string('═', 80));
         
-        foreach (var service in board.trainServices)
+        foreach (var service in filteredServices)
         {
             // Store service ID for selection
             if (!string.IsNullOrEmpty(service.serviceID))

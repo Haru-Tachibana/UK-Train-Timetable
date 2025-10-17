@@ -45,23 +45,25 @@ public class NaturalLanguageQueryService
                 {
                     case AIProvider.Groq:
                         // Groq: Fast and FREE! https://console.groq.com
-                        _modelName = "llama-3.1-70b-versatile"; // Fast and smart
+                        // Using llama-3.3-70b-versatile (latest stable free model)
+                        _modelName = "llama-3.3-70b-versatile";
                         var groqClient = new OpenAIClient(new ApiKeyCredential(_apiKey!), 
                             new OpenAIClientOptions { Endpoint = new Uri("https://api.groq.com/openai/v1") });
                         _chatClient = groqClient.GetChatClient(_modelName);
-                        Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine($"Using Groq AI ({_modelName}) - FREE!");
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine($"\nUsing Groq AI ({_modelName})");
                         Console.ResetColor();
                         break;
                         
                     case AIProvider.OpenRouter:
                         // OpenRouter: Many free models! https://openrouter.ai
-                        _modelName = "meta-llama/llama-3.1-8b-instruct:free"; // Free tier
+                        // Using llama 3.1 8B (free tier, stable)
+                        _modelName = "meta-llama/llama-3.1-8b-instruct:free";
                         var openRouterClient = new OpenAIClient(new ApiKeyCredential(_apiKey!),
                             new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") });
                         _chatClient = openRouterClient.GetChatClient(_modelName);
                         Console.ForegroundColor = ConsoleColor.Green;
-                        Console.WriteLine($"Using OpenRouter ({_modelName}) - FREE!");
+                        Console.WriteLine($"\nUsing OpenRouter ({_modelName})");
                         Console.ResetColor();
                         break;
                 }
