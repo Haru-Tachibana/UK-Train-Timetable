@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TrainDashboard.Services;
@@ -12,7 +13,38 @@ class Program
     static async Task Main(string[] args)
     {
         // Load environment variables from .env file
-        Env.Load();
+        // Try multiple locations to ensure it's found
+        var envPaths = new[]
+        {
+            ".env",  // Current directory
+            Path.Combine(Directory.GetCurrentDirectory(), ".env"),  // Explicit current directory
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env"),  // App directory
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".env")  // Project root from bin/Debug/net9.0
+        };
+
+        bool envLoaded = false;
+        foreach (var envPath in envPaths)
+        {
+            if (File.Exists(envPath))
+            {
+                Env.Load(envPath);
+                envLoaded = true;
+                break;
+            }
+        }
+
+        if (!envLoaded)
+        {
+            // Try the default load as fallback
+            try
+            {
+                Env.Load();
+            }
+            catch
+            {
+                // Will check for token below
+            }
+        }
         
         // Get API token from environment variable
         var apiToken = Environment.GetEnvironmentVariable("DARWIN_API_TOKEN");
@@ -22,7 +54,15 @@ class Program
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("Error: DARWIN_API_TOKEN not found in environment variables.");
             Console.WriteLine("Please create a .env file with your API token.");
-            Console.WriteLine("See .env.example for the required format.");
+            Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
+            Console.WriteLine($"Looking for .env in:");
+            foreach (var path in envPaths)
+            {
+                var fullPath = Path.GetFullPath(path);
+                var exists = File.Exists(fullPath);
+                Console.WriteLine($"  {fullPath} - {(exists ? "EXISTS" : "NOT FOUND")}");
+            }
+            Console.WriteLine("\nSee .env.example for the required format.");
             Console.ResetColor();
             return;
         }
@@ -30,33 +70,85 @@ class Program
         // Configure console window (works better in Windows, but we can try for macOS)
         Console.Title = "UK Train Dashboard";
         Console.Clear();
-        DisplayHeader();
+    DisplayHeader();
+    // Darwin API timeOffset/timeWindow limits warning
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("NOTE: National Rail Darwin API can only fetch trains from 2 hours in the past to 2 hours in the future.");
+    Console.WriteLine("If you request a time outside this range, only the closest available trains will be shown.\n");
+    Console.ResetColor();
         
         var trainService = new TrainService(apiToken);
+        
+        // Initialize AI service (optional) - supports FREE Groq or OpenRouter
+        var aiApiKey = Environment.GetEnvironmentVariable("GROQ_API_KEY")
+                    ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+        var aiProvider = Environment.GetEnvironmentVariable("AI_PROVIDER"); // groq or openrouter
+        var aiService = new NaturalLanguageQueryService(aiApiKey, aiProvider);
+        
+        if (aiService.IsEnabled)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("\nAI Natural Language Query Mode: ENABLED");
+            Console.ResetColor();
+        }
         
         while (true)
         {
             try
             {
-                // Get departure station
+                // Ask user for input mode
                 Console.WriteLine("\n" + new string('=', 80));
-                var departureStation = await SelectStationAsync("DEPARTURE");
-                if (departureStation == null) break;
                 
-                // Ask if user wants to filter by destination
-                Console.WriteLine("\nWould you like to filter by destination? (y/n): ");
-                var filterChoice = Console.ReadLine()?.Trim().ToLower();
-                
-                string? destinationStation = null;
-                if (filterChoice == "y" || filterChoice == "yes")
+                if (aiService.IsEnabled)
                 {
-                    destinationStation = await SelectStationAsync("DESTINATION");
-                    if (destinationStation == null) continue;
+                    Console.WriteLine("How would you like to search?");
+                    Console.WriteLine("1. Natural language (e.g., 'Trains from Paddington to Bristol around 3pm')");
+                    Console.WriteLine("2. Traditional mode (step-by-step selection)");
+                    Console.Write("\nEnter choice (1/2) or type your query directly: ");
+                    
+                    var modeInput = Console.ReadLine()?.Trim();
+                    
+                    if (string.IsNullOrEmpty(modeInput))
+                    {
+                        continue;
+                    }
+                    
+                    if (modeInput.Equals("exit", StringComparison.OrdinalIgnoreCase) || 
+                        modeInput.Equals("quit", StringComparison.OrdinalIgnoreCase))
+                    {
+                        break;
+                    }
+                    
+                    // If user chose option 2 or explicitly wants traditional mode
+                    if (modeInput == "2")
+                    {
+                        await TraditionalQueryModeAsync(trainService);
+                        continue;
+                    }
+                    
+                    // If user chose option 1, ask for natural query
+                    string naturalQuery;
+                    if (modeInput == "1")
+                    {
+                        Console.Write("\nWhat journey are you planning? ");
+                        naturalQuery = Console.ReadLine()?.Trim() ?? "";
+                    }
+                    else
+                    {
+                        // User typed something else - treat it as a natural language query
+                        naturalQuery = modeInput;
+                    }
+                    
+                    if (!string.IsNullOrEmpty(naturalQuery))
+                    {
+                        await ProcessNaturalLanguageQueryAsync(trainService, aiService, naturalQuery);
+                    }
                 }
-                
-                // Fetch and display departure board
-                Console.WriteLine("\nFetching live departure information...\n");
-                await DisplayDepartureBoardAsync(trainService, departureStation, destinationStation);
+                else
+                {
+                    // AI not available, use traditional mode
+                    await TraditionalQueryModeAsync(trainService);
+                }
                 
                 // Ask if user wants to continue
                 Console.WriteLine("\n" + new string('=', 80));
@@ -80,6 +172,138 @@ class Program
         
         Console.WriteLine("\nThank you for using Train Dashboard!");
     }
+    
+    static async Task ProcessNaturalLanguageQueryAsync(TrainService trainService, NaturalLanguageQueryService aiService, string query)
+    {
+        Console.WriteLine("\nProcessing your query with AI...");
+        
+        var parsedQuery = await aiService.ParseQueryAsync(query);
+        
+        if (parsedQuery == null || !parsedQuery.IsValid)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("I couldn't understand that query. Let's try the traditional mode.");
+            Console.ResetColor();
+            await TraditionalQueryModeAsync(trainService);
+            return;
+        }
+        
+        // Show what was understood
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("\nI understood:");
+        if (!string.IsNullOrEmpty(parsedQuery.DepartureStation))
+            Console.WriteLine($"  From: {parsedQuery.DepartureStation}");
+        if (!string.IsNullOrEmpty(parsedQuery.DestinationStation))
+            Console.WriteLine($"  To: {parsedQuery.DestinationStation}");
+        if (parsedQuery.PreferredDepartureTime.HasValue)
+            Console.WriteLine($"  Around: {parsedQuery.PreferredDepartureTime.Value:hh\\:mm}");
+        Console.ResetColor();
+        
+        // Resolve station codes
+        string? departureCode = null;
+        string? destinationCode = null;
+        
+        // Resolve departure station
+        if (!string.IsNullOrEmpty(parsedQuery.DepartureStation))
+        {
+            departureCode = await ResolveStationAsync(parsedQuery.DepartureStation, "DEPARTURE");
+        }
+        
+        if (departureCode == null)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("Could not determine departure station. Please try again.");
+            Console.ResetColor();
+            return;
+        }
+        
+        // Resolve destination station if provided
+        if (!string.IsNullOrEmpty(parsedQuery.DestinationStation))
+        {
+            destinationCode = await ResolveStationAsync(parsedQuery.DestinationStation, "DESTINATION");
+        }
+        
+        // Fetch and display
+        Console.WriteLine("\nFetching live departure information...\n");
+        await DisplayDepartureBoardAsync(trainService, departureCode, destinationCode, parsedQuery.PreferredDepartureTime);
+    }
+    
+    static async Task<string?> ResolveStationAsync(string stationInput, string stationType)
+    {
+        // Check if it's already a valid CRS code
+        if (stationInput.Length == 3 && StationLookup.IsValidCrsCode(stationInput))
+        {
+            return stationInput.ToUpper();
+        }
+        
+        // Try direct lookup
+        var code = StationLookup.GetStationCode(stationInput);
+        if (code != null)
+        {
+            return code;
+        }
+        
+        // Search for matches
+        var matches = StationLookup.SearchStations(stationInput);
+        
+        if (matches.Count == 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"No stations found matching '{stationInput}'.");
+            Console.ResetColor();
+            return null;
+        }
+        
+        if (matches.Count == 1)
+        {
+            code = StationLookup.GetStationCode(matches[0]);
+            Console.WriteLine($"Using: {matches[0]} ({code})");
+            return code;
+        }
+        
+        // Multiple matches - let user choose
+        Console.WriteLine($"\nMultiple stations found for '{stationInput}':");
+        for (int i = 0; i < Math.Min(matches.Count, 10); i++)
+        {
+            var matchCode = StationLookup.GetStationCode(matches[i]);
+            Console.WriteLine($"{i + 1}. {matches[i]} ({matchCode})");
+        }
+        
+        Console.Write($"\nSelect {stationType} station (1-{Math.Min(matches.Count, 10)}): ");
+        var choice = Console.ReadLine()?.Trim();
+        
+        if (int.TryParse(choice, out int selection) && selection > 0 && selection <= Math.Min(matches.Count, 10))
+        {
+            code = StationLookup.GetStationCode(matches[selection - 1]);
+            Console.WriteLine($"Selected: {matches[selection - 1]} ({code})");
+            return code;
+        }
+        
+        return null;
+    }
+    
+    static async Task TraditionalQueryModeAsync(TrainService trainService)
+    {
+        // Get departure station
+        var departureStation = await SelectStationAsync("DEPARTURE");
+        if (departureStation == null) return;
+        
+        // Ask if user wants to filter by destination
+        Console.WriteLine("\nWould you like to filter by destination? (y/n): ");
+        var filterChoice = Console.ReadLine()?.Trim().ToLower();
+        
+        string? destinationStation = null;
+        if (filterChoice == "y" || filterChoice == "yes")
+        {
+            destinationStation = await SelectStationAsync("DESTINATION");
+            if (destinationStation == null) return;
+        }
+        
+        // Fetch and display departure board
+        Console.WriteLine("\nFetching live departure information...\n");
+        await DisplayDepartureBoardAsync(trainService, departureStation, destinationStation);
+    }
+    
     
     static void DisplayHeader()
     {
@@ -308,9 +532,61 @@ class Program
         return null;
     }
     
-    static async Task DisplayDepartureBoardAsync(TrainService trainService, string departureCode, string? destinationCode)
+    static async Task DisplayDepartureBoardAsync(TrainService trainService, string departureCode, string? destinationCode, TimeSpan? preferredTime = null)
     {
-        var board = await trainService.GetDepartureBoardAsync(departureCode, destinationCode, 15);
+        int timeOffset = 0;
+        int timeWindow = 120; // Default 2 hours
+        
+        // Calculate time offset and window if user specified a preferred time
+        if (preferredTime.HasValue)
+        {
+            var now = DateTime.Now.TimeOfDay;
+            var targetTime = preferredTime.Value;
+            
+            // Calculate minutes until target time
+            var minutesUntilTarget = (int)(targetTime - now).TotalMinutes;
+            
+            // Darwin API allows timeOffset from -120 to +120 minutes only
+            if (minutesUntilTarget > 120)
+            {
+                // Target is too far in the future (more than 2 hours)
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                var hour = targetTime.Hours;
+                var minute = targetTime.Minutes;
+                var ampm = hour >= 12 ? "PM" : "AM";
+                var displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                Console.WriteLine($"\nNote: {displayHour}:{minute:D2} {ampm} is more than 2 hours away.");
+                Console.WriteLine("Darwin API can only show trains up to 2 hours in the future.");
+                Console.WriteLine("Showing trains from 2 hours ahead instead:\n");
+                Console.ResetColor();
+                timeOffset = 120; // Max allowed
+                timeWindow = 120;
+            }
+            else if (minutesUntilTarget > 0)
+            {
+                // Target time is within the next 2 hours - show from now to past target
+                timeOffset = 0;
+                timeWindow = Math.Min(120, minutesUntilTarget + 60); // Go 1 hour past target or max 120
+            }
+            else if (minutesUntilTarget > -120)
+            {
+                // Target time was in the past but within lookback window
+                timeOffset = Math.Max(-120, minutesUntilTarget - 30);
+                timeWindow = 120;
+            }
+            else
+            {
+                // Target time is too far in the past
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("\nNote: Requested time has passed.");
+                Console.WriteLine("Showing current departures instead:\n");
+                Console.ResetColor();
+                timeOffset = 0;
+                timeWindow = 120;
+            }
+        }
+        
+        var board = await trainService.GetDepartureBoardAsync(departureCode, destinationCode, 20, timeOffset, timeWindow);
         
         if (board == null)
         {
@@ -326,7 +602,22 @@ class Program
             Console.WriteLine($"Calling at: {board.filterLocationName}");
         }
         Console.WriteLine($"Generated at: {board.generatedAt:HH:mm:ss}");
-        Console.ResetColor();
+        
+        // Show time filter if specified
+        if (preferredTime.HasValue)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            var hour = preferredTime.Value.Hours;
+            var minute = preferredTime.Value.Minutes;
+            var ampm = hour >= 12 ? "PM" : "AM";
+            var displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+            Console.WriteLine($"Showing trains around: {displayHour}:{minute:D2} {ampm}");
+            Console.ResetColor();
+        }
+        else
+        {
+            Console.ResetColor();
+        }
         
         if (board.trainServices == null || board.trainServices.Length == 0)
         {
@@ -339,6 +630,39 @@ class Program
             return;
         }
         
+        // Filter trains by preferred time if specified (client-side filtering for precision)
+        var filteredServices = board.trainServices;
+        if (preferredTime.HasValue)
+        {
+            var targetTime = preferredTime.Value;
+            var filterWindow = TimeSpan.FromHours(1); // Show trains within ±1 hour for precision
+            
+            filteredServices = board.trainServices.Where(service =>
+            {
+                if (string.IsNullOrEmpty(service.std)) return false;
+                
+                if (TimeSpan.TryParse(service.std, out var scheduledTime))
+                {
+                    var timeDiff = (scheduledTime - targetTime).Duration();
+                    return timeDiff <= filterWindow;
+                }
+                return false;
+            }).ToArray();
+            
+            if (filteredServices.Length == 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                var hour = targetTime.Hours;
+                var minute = targetTime.Minutes;
+                var ampm = hour >= 12 ? "PM" : "AM";
+                var displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+                Console.WriteLine($"\nNo trains found around {displayHour}:{minute:D2} {ampm}.");
+                Console.WriteLine("Showing all available trains instead:");
+                Console.ResetColor();
+                filteredServices = board.trainServices;
+            }
+        }
+        
         // Store service IDs for selection
         var serviceIds = new Dictionary<int, string>();
         int index = 1;
@@ -347,7 +671,7 @@ class Program
         Console.WriteLine($"{"#",-3} {"Destination",-25} {"Sch",-6} {"Exp",-6} {"Plat",-5} {"Status",-12} {"Operator",-15}");
         Console.WriteLine(new string('═', 80));
         
-        foreach (var service in board.trainServices)
+        foreach (var service in filteredServices)
         {
             // Store service ID for selection
             if (!string.IsNullOrEmpty(service.serviceID))

@@ -55,7 +55,9 @@ namespace TrainDashboard.Services
         public async Task<StationBoard3?> GetDepartureBoardAsync(
             string stationCode,
             string? destinationCode = null,
-            int numberOfRows = 10)
+            int numberOfRows = 10,
+            int timeOffset = 0,
+            int timeWindow = 120)
         {
             try
             {
@@ -88,15 +90,15 @@ namespace TrainDashboard.Services
                     destinationCode = destinationCode.ToUpper();
                 }
 
-                // Call the API
+                // Call the API with custom time window
                 var response = await client.GetDepartureBoardAsync(
                     token,
                     (ushort)numberOfRows,
                     stationCode,
                     destinationCode,
                     !string.IsNullOrEmpty(destinationCode) ? filterType : FilterType.from,
-                    0, // timeOffset
-                    120 // timeWindow
+                    timeOffset,   // Minutes from now to start showing trains
+                    timeWindow    // Minutes window to show trains
                 );
 
                 return response?.GetStationBoardResult;
