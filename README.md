@@ -4,14 +4,37 @@ A real-time UK railway departure board console application powered by the Nation
 
 ## Features
 
-- **Interactive Station Search**: Search for stations by name or 3-letter CRS code
-- **Live Departure Information**: Real-time departure boards with up-to-date information
-- **Destination Filtering**: Optionally filter departures by destination station
-- **Comprehensive Details**: View scheduled time, expected time, platform, and service status
-- **Status Indicators**: Color-coded display for on-time, delayed, and cancelled services
-- **Delay/Cancellation Reasons**: See explanations when services are disrupted
 
 ## Quick Start
+
+### Prerequisites
+
+1. **.NET 9.0 SDK**: Make sure you have .NET 9.0 or later installed
+2. **Darwin API Token**: Get a free API token from [National Rail OpenLDBWS](https://www.nationalrail.co.uk/developers/)
+
+### Setup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/Haru-Tachibana/UK-Train-Timetable.git
+   cd UK-Train-Timetable
+   ```
+
+2. **Configure your API token**:
+   - Copy `.env.example` to `.env`:
+     ```bash
+     cp .env.example .env
+     ```
+   - Open `.env` and replace `your_api_token_here` with your actual Darwin API token:
+     ```
+     DARWIN_API_TOKEN=your_actual_token_here
+     ```
+   - **Important**: Never commit your `.env` file to version control (it's already in `.gitignore`)
+
+3. **Restore dependencies**:
+   ```bash
+   dotnet restore
+   ```
 
 ### Running the Application
 

@@ -17,6 +17,41 @@ namespace TrainDashboard.Services
             _apiToken = apiToken ?? throw new ArgumentNullException(nameof(apiToken));
         }
 
+        /// <summary>
+        /// Fetches detailed information about a specific train service
+        /// </summary>
+        public async Task<ServiceDetails1?> GetServiceDetailsAsync(string serviceId)
+        {
+            try
+            {
+                // Create SOAP client binding for HTTPS
+                var binding = new BasicHttpsBinding(BasicHttpsSecurityMode.Transport)
+                {
+                    MaxReceivedMessageSize = 2000000, // allow large XML responses
+                    SendTimeout = TimeSpan.FromSeconds(30),
+                    ReceiveTimeout = TimeSpan.FromSeconds(30)
+                };
+
+                var endpoint = new EndpointAddress(_endpointUrl);
+
+                // Create the WCF client proxy
+                using var client = new LDBServiceSoapClient(binding, endpoint);
+
+                // Configure the access token
+                var token = new AccessToken { TokenValue = _apiToken };
+
+                // Call the API
+                var response = await client.GetServiceDetailsAsync(token, serviceId);
+
+                return response?.GetServiceDetailsResult;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"API Error: {ex.Message}");
+                return null; // Return null instead of throwing to provide better user experience
+            }
+        }
+
         public async Task<StationBoard3?> GetDepartureBoardAsync(
             string stationCode,
             string? destinationCode = null,
@@ -27,7 +62,9 @@ namespace TrainDashboard.Services
                 // Create SOAP client binding for HTTPS
                 var binding = new BasicHttpsBinding(BasicHttpsSecurityMode.Transport)
                 {
-                    MaxReceivedMessageSize = 2000000 // allow large XML responses
+                    MaxReceivedMessageSize = 2000000, // allow large XML responses
+                    SendTimeout = TimeSpan.FromSeconds(30),
+                    ReceiveTimeout = TimeSpan.FromSeconds(30)
                 };
 
                 var endpoint = new EndpointAddress(_endpointUrl);
@@ -40,6 +77,16 @@ namespace TrainDashboard.Services
 
                 // Set up filter type if destination is provided
                 FilterType filterType = FilterType.to;
+
+                // Make sure station codes are uppercase
+                if (stationCode != null)
+                {
+                    stationCode = stationCode.ToUpper();
+                }
+                if (destinationCode != null)
+                {
+                    destinationCode = destinationCode.ToUpper();
+                }
 
                 // Call the API
                 var response = await client.GetDepartureBoardAsync(
@@ -56,7 +103,8 @@ namespace TrainDashboard.Services
             }
             catch (Exception ex)
             {
-                throw new Exception($"Error fetching departure board: {ex.Message}", ex);
+                Console.WriteLine($"API Error: {ex.Message}");
+                return null; // Return null instead of throwing to provide better user experience
             }
         }
 
