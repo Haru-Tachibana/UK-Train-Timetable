@@ -72,38 +72,6 @@ Or directly execute the compiled binary:
    - Press Enter to search again
    - Type "exit" to quit the application
 
-## Station Examples
-
-The app includes over 100 major UK railway stations:
-
-### London Stations
-- Paddington (PAD)
-- King's Cross (KGX)
-- Euston (EUS)
-- Victoria (VIC)
-- Waterloo (WAT)
-- Liverpool Street (LST)
-- And more...
-
-### Major Cities
-- Birmingham New Street (BHM)
-- Manchester Piccadilly (MAN)
-- Edinburgh (EDB)
-- Glasgow Central (GLC)
-- Leeds (LDS)
-- Liverpool Lime Street (LIV)
-- And many more...
-
-## API Configuration
-
-The application uses the National Rail Darwin API with the following credentials:
-
-- **Service**: OpenLDBWS (Live Departure Boards Web Service)
-- **Token**: ed7cf477-14b5-4066-8cdc-df9b8aa69813
-- **Username**: haru
-- **Email**: paloma030415@gmail.com
-
-The token is configured in `Program.cs`. If you need to change it, update the `ApiToken` constant.
 
 ## Technical Details
 
