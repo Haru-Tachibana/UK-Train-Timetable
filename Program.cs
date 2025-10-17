@@ -74,9 +74,11 @@ class Program
         
         var trainService = new TrainService(apiToken);
         
-        // Initialize AI service (optional)
-        var openAiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-        var aiService = new NaturalLanguageQueryService(openAiKey);
+        // Initialize AI service (optional) - supports FREE Groq or OpenRouter
+        var aiApiKey = Environment.GetEnvironmentVariable("GROQ_API_KEY")
+                    ?? Environment.GetEnvironmentVariable("OPENROUTER_API_KEY");
+        var aiProvider = Environment.GetEnvironmentVariable("AI_PROVIDER"); // groq or openrouter
+        var aiService = new NaturalLanguageQueryService(aiApiKey, aiProvider);
         
         if (aiService.IsEnabled)
         {

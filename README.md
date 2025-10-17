@@ -24,7 +24,7 @@ A real-time UK railway departure board console application powered by the Nation
 
 - .NET 9.0 SDK or later
 - Darwin API Token from National Rail (required)
-- OpenAI API Key (optional, for natural language queries)
+- AI API Key (optional, 100% FREE options available - Groq or OpenRouter)
 
 ### Getting API Tokens
 
@@ -37,14 +37,22 @@ A real-time UK railway departure board console application powered by the Nation
 5. You will receive your API token via email (usually within minutes)
 6. Keep your token secure and never share it publicly
 
-#### OpenAI API Key (Optional - for AI Natural Language Queries)
+#### AI API Key (Optional - 100% FREE!)
 
-1. Visit OpenAI Platform: https://platform.openai.com/api-keys
-2. Sign up or log in to your account
-3. Click "Create new secret key"
-4. Copy the key immediately (you won't be able to see it again)
-5. Note: You may need to add credit to your OpenAI account for API usage
-6. If you don't add an OpenAI key, the app will work in traditional mode only
+**Option 1: Groq (RECOMMENDED)**
+1. Visit: https://console.groq.com/keys
+2. Sign up with Google/GitHub (FREE, no credit card needed)
+3. Click "Create API Key"
+4. Copy the key (starts with `gsk_`)
+5. Super fast inference with Llama 3.1 models!
+
+**Option 2: OpenRouter (Also FREE)**
+1. Visit OpenAI Platform: https://openrouter.ai/keys
+2. Sign up (free)
+3. Get API key (starts with `sk-or-v1-`)
+4. Access to multiple free models (Llama, Mistral, Gemma)
+
+See `FREE_AI_SETUP.md` for detailed instructions!
 
 ### Setup
 
@@ -60,9 +68,10 @@ A real-time UK railway departure board console application powered by the Nation
      ```
      DARWIN_API_TOKEN=your_actual_token_here
      ```
-   - Optionally add your OpenAI API key for AI features:
+   - Optionally add your FREE AI key (Groq recommended):
      ```
-     OPENAI_API_KEY=your_openai_key_here
+     AI_PROVIDER=groq
+     GROQ_API_KEY=gsk_your_groq_key_here
      ```
    - Important: Never commit your `.env` file to version control
 
@@ -141,7 +150,8 @@ The AI will understand your query and extract:
 ### Technologies Used
 
 - .NET 9.0 runtime
-- OpenAI API for natural language processing (GPT-4o-mini)
+- FREE AI providers: Groq (Llama 3.1) or OpenRouter (multiple free models)
+- OpenAI SDK (compatible with Groq and OpenRouter)
 - System.ServiceModel for SOAP client communication
 - DotNetEnv for environment variable management
 - Async/await pattern for responsive operations

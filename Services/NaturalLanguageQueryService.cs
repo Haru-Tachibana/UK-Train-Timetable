@@ -1,37 +1,93 @@
 using System;
+using System.ClientModel;
 using System.Text.Json;
 using System.Threading.Tasks;
+using OpenAI;
 using OpenAI.Chat;
 
 namespace TrainDashboard.Services;
 
 /// <summary>
+/// AI Provider type
+/// </summary>
+public enum AIProvider
+{
+    Groq,
+    OpenRouter
+}
+
+/// <summary>
 /// Service for parsing natural language queries into structured journey information
-/// using OpenAI API
+/// Supports OpenAI, Groq (free!), and OpenRouter
 /// </summary>
 public class NaturalLanguageQueryService
 {
     private readonly string? _apiKey;
     private readonly ChatClient? _chatClient;
     private readonly bool _isEnabled;
+    private readonly AIProvider _provider;
+    private readonly string _modelName = "gpt-4o-mini"; // Default model
 
-    public NaturalLanguageQueryService(string? apiKey)
+    public NaturalLanguageQueryService(string? apiKey, string? providerName = null)
     {
         _apiKey = apiKey;
         _isEnabled = !string.IsNullOrEmpty(apiKey);
         
-        if (_isEnabled)
+        // Determine provider from environment or default to OpenAI
+        _provider = DetermineProvider(providerName);
+        
+        if (_isEnabled && !string.IsNullOrEmpty(_apiKey))
         {
             try
             {
-                _chatClient = new ChatClient("gpt-4o-mini", _apiKey);
+                // Configure based on provider
+                switch (_provider)
+                {
+                    case AIProvider.Groq:
+                        // Groq: Fast and FREE! https://console.groq.com
+                        _modelName = "llama-3.1-70b-versatile"; // Fast and smart
+                        var groqClient = new OpenAIClient(new ApiKeyCredential(_apiKey!), 
+                            new OpenAIClientOptions { Endpoint = new Uri("https://api.groq.com/openai/v1") });
+                        _chatClient = groqClient.GetChatClient(_modelName);
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine($"Using Groq AI ({_modelName}) - FREE!");
+                        Console.ResetColor();
+                        break;
+                        
+                    case AIProvider.OpenRouter:
+                        // OpenRouter: Many free models! https://openrouter.ai
+                        _modelName = "meta-llama/llama-3.1-8b-instruct:free"; // Free tier
+                        var openRouterClient = new OpenAIClient(new ApiKeyCredential(_apiKey!),
+                            new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/v1") });
+                        _chatClient = openRouterClient.GetChatClient(_modelName);
+                        Console.ForegroundColor = ConsoleColor.Green;
+                        Console.WriteLine($"Using OpenRouter ({_modelName}) - FREE!");
+                        Console.ResetColor();
+                        break;
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Warning: Could not initialize OpenAI client: {ex.Message}");
+                Console.WriteLine($"Warning: Could not initialize AI client: {ex.Message}");
                 _isEnabled = false;
             }
         }
+    }
+    
+    private AIProvider DetermineProvider(string? providerName)
+    {
+        if (string.IsNullOrEmpty(providerName))
+            providerName = Environment.GetEnvironmentVariable("AI_PROVIDER");
+            
+        if (string.IsNullOrEmpty(providerName))
+            return AIProvider.Groq; // Default to FREE Groq!
+            
+        return providerName.ToLower() switch
+        {
+            "groq" => AIProvider.Groq,
+            "openrouter" => AIProvider.OpenRouter,
+            _ => AIProvider.Groq // Default to Groq
+        };
     }
 
     /// <summary>
