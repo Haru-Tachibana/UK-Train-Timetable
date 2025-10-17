@@ -1,103 +1,142 @@
-# Train Dashboard 🚂
+# Train Dashboard
 
 A real-time UK railway departure board console application powered by the National Rail Darwin API (OpenLDBWS).
 
 ## Features
+
+- Real-time departure board display for UK railway stations
+- Station search by name or CRS code
+- Optional destination filtering
+- Live service status updates (on time, delayed, cancelled)
+- Platform information and expected departure times
+- Color-coded status display for easy scanning
+- Comprehensive station database with fuzzy search
+- Service details including operator and service type
+- Delay and cancellation reason display
+- Support for both departures and arrivals
 
 
 ## Quick Start
 
 ### Prerequisites
 
-1. **.NET 9.0 SDK**: Make sure you have .NET 9.0 or later installed
-2. **Darwin API Token**: Get a free API token from [National Rail OpenLDBWS](https://www.nationalrail.co.uk/developers/)
+- .NET 9.0 SDK or later
+- Darwin API Token from National Rail
+
+### Getting an API Token
+
+1. Visit the National Rail OpenLDBWS registration page: https://www.nationalrail.co.uk/developers/
+2. Click on "Register" or "Request Access Token"
+3. Fill out the registration form with your details
+4. Accept the terms and conditions
+5. You will receive your API token via email (usually within minutes)
+6. Keep your token secure and never share it publicly
 
 ### Setup
 
-1. **Clone the repository**:
+1. Clone the repository:
    ```bash
    git clone https://github.com/Haru-Tachibana/UK-Train-Timetable.git
    cd UK-Train-Timetable
    ```
 
-2. **Configure your API token**:
-   - Copy `.env.example` to `.env`:
-     ```bash
-     cp .env.example .env
-     ```
-   - Open `.env` and replace `your_api_token_here` with your actual Darwin API token:
+2. Configure your API token:
+   - Create a `.env` file in the project root directory
+   - Add your API token:
      ```
      DARWIN_API_TOKEN=your_actual_token_here
      ```
-   - **Important**: Never commit your `.env` file to version control (it's already in `.gitignore`)
+   - Important: Never commit your `.env` file to version control
 
-3. **Restore dependencies**:
+3. Restore dependencies:
    ```bash
    dotnet restore
    ```
 
 ### Running the Application
 
+Build and run with:
 ```bash
 dotnet run
 ```
 
-Or directly execute the compiled binary:
-
+Or build first, then execute:
 ```bash
+dotnet build
 ./bin/Debug/net9.0/TrainDashboard
+```
+
+For production deployment:
+```bash
+dotnet publish -c Release
+./bin/Release/net9.0/publish/TrainDashboard
 ```
 
 ### How to Use
 
-1. **Select Departure Station**:
+1. Start the application using one of the methods above
+
+2. Select a departure station:
    - Enter a station name (e.g., "Paddington", "Kings Cross")
    - Enter a 3-letter CRS code (e.g., "PAD", "KGX")
    - Type "list" to browse all available stations
 
-2. **Optional Destination Filter**:
-   - Choose whether to filter by a specific destination
-   - If yes, select the destination station the same way
+3. Optional destination filtering:
+   - Choose whether to filter by a specific destination (y/n)
+   - If yes, select the destination station using the same methods
 
-3. **View Live Departures**:
-   - See real-time departure information including:
-     - Destination
-     - Scheduled departure time
-     - Expected departure time
-     - Platform number
-     - Service status (On time/Delayed/Cancelled)
-     - Train operator
+4. View the live departure board showing:
+   - Destination
+   - Scheduled departure time
+   - Expected departure time
+   - Platform number
+   - Service status
+   - Train operator
 
-4. **Repeat or Exit**:
-   - Press Enter to search again
-   - Type "exit" to quit the application
+5. Continue using the application:
+   - Press Enter to make another search
+   - Type "exit" to quit
 
 
 ## Technical Details
 
 ### Technologies Used
-- **.NET 9.0**: Latest .NET runtime
-- **System.ServiceModel**: SOAP client for Darwin API communication
-- **Async/Await**: Asynchronous programming for responsive UI
+
+- .NET 9.0 runtime
+- System.ServiceModel for SOAP client communication
+- DotNetEnv for environment variable management
+- Async/await pattern for responsive operations
+
+### Dependencies
+
+- DotNetEnv (v3.1.1)
+- System.ServiceModel.Http (v8.0.0)
+- System.ServiceModel.Primitives (v8.1.2)
+- System.ServiceModel.NetTcp (v8.x)
 
 ### Project Structure
 
 ```
 TrainDashboard/
-├── Program.cs                    # Main application entry point
+├── Program.cs                # Main application and UI
+├── TrainDashboard.csproj     # Project configuration
+├── .env                      # API token configuration (not in git)
 ├── DarwinService/
-│   └── DarwinClient.cs          # SOAP client and data models
+│   ├── Reference.cs          # SOAP client auto-generated code
+│   └── dotnet-svcutil.params.json
 └── Services/
-    ├── StationLookup.cs         # Station database and search
-    └── TrainService.cs          # API integration layer
+    ├── StationLookup.cs      # Station database and search
+    ├── StationBoard.cs       # Data models
+    └── TrainService.cs       # API integration layer
 ```
 
-### Key Classes
+### Key Components
 
-- **DarwinClient**: SOAP service client for Darwin API
-- **StationLookup**: Station name to CRS code mapping and search
-- **TrainService**: High-level API wrapper with business logic
-- **Program**: Console UI and user interaction
+- Program.cs: Console UI and user interaction flow
+- StationLookup: Station name to CRS code mapping with fuzzy search
+- TrainService: High-level wrapper for Darwin API operations
+- StationBoard: Internal data models for departure information
+- DarwinService: Auto-generated SOAP client for Darwin API
 
 ## Display Information
 
@@ -120,37 +159,46 @@ The departure board shows:
 
 ## Troubleshooting
 
+### "DARWIN_API_TOKEN not found in environment variables"
+
+- Ensure you have created a `.env` file in the project root
+- Verify the file contains: `DARWIN_API_TOKEN=your_token_here`
+- Check that you have replaced the placeholder with your actual token
+
 ### "Unable to fetch departure information"
 
-- Check your internet connection
-- Verify the API token is still valid
-- Ensure the station CRS code is correct
+- Verify your internet connection is active
+- Confirm your API token is valid and not expired
+- Ensure the station CRS code exists
+- Check if the Darwin API service is operational
 
 ### "No stations found"
 
-- Try using a partial station name
+- Try using a partial station name instead of the full name
 - Type "list" to see all available stations
-- Use the 3-letter CRS code directly
+- Use the 3-letter CRS code directly if known
+- Check for typos in the station name
 
-### Build Errors
+### Build or Runtime Errors
 
+Clean and rebuild the project:
 ```bash
-# Clean and rebuild
 dotnet clean
 dotnet restore
 dotnet build
 ```
 
+Verify .NET SDK version:
+```bash
+dotnet --version
+```
+
 ## API Documentation
 
 For more information about the Darwin API:
-- [National Rail Enquiries OpenLDBWS](https://www.nationalrail.co.uk/developers/)
-- [Darwin Web Service Guide](https://lite.realtime.nationalrail.co.uk/OpenLDBWS/)
+- National Rail Enquiries OpenLDBWS: https://www.nationalrail.co.uk/developers/
+- Darwin Web Service Guide: https://lite.realtime.nationalrail.co.uk/OpenLDBWS/
 
 ## License
 
 This project is for personal use with the National Rail Darwin API.
-
----
-
-**Made with ❤️ for UK railway passengers**
